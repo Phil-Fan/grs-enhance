@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GRS Enhance — 浙大研究生选课助手
 // @namespace    grs-enhance
-// @version      1.6
+// @version      1.7
 // @description  浙大研究生选课页面:排队位次内联显示在课程表格旁,悬停徽章可对比同课程各教学班排队情况并一键换班;课表悬浮窗完整显示、可折叠缩放
 // @author       philfan
 // @match        https://yjsy.zju.edu.cn/*
@@ -593,8 +593,9 @@
   var lastXn = null;
   function renderKb() {
     var xn;
-    var go = function (xnUsed) {
+    var go = function (xnUsed, allowFallback) {
       loadKb(xnUsed).then(function (cells) {
+        if (!cells.length && allowFallback) { go(String(Number(xnUsed) - 1), false); return; } // 空则回退上一年
         lastXn = xnUsed;
         var WEEK = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
         var MAXJ = 13;
@@ -657,13 +658,10 @@
       });
     };
 
-    if (lastXn) { go(lastXn); return; }
-    // 从我的课程接口拿 xn, 失败则按日期推算
-    loadMyCourses().then(function (m) { go(m.xn); }).catch(function () {
-      var now = new Date();
-      var xn = now.getMonth() + 1 >= 9 ? now.getFullYear() : now.getFullYear() - 1;
-      go(String(xn));
-    });
+    if (lastXn) { go(lastXn, true); return; }
+    // 学年无现成接口(我的课程记录里 xn 为 null), 按日期推算: 9 月起为新学年; 课表为空自动回退上一年
+    var now = new Date();
+    go(String(now.getMonth() + 1 >= 9 ? now.getFullYear() : now.getFullYear() - 1), true);
   }
 
   /* ---------- 启动 ---------- */
