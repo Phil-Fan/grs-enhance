@@ -11,8 +11,9 @@
 ### 自己复制
 
 1. 浏览器安装 [Tampermonkey](https://www.tampermonkey.net/)
-2. 新建脚本,粘贴 `grs-enhance.user.js` 全部内容并保存
-3. 打开浙大研究生院选课页面(`yjsy.zju.edu.cn`,菜单"我的课程")自动生效
+2. 在插件页面，启用"允许用户脚本”扩展设置。
+3. 新建脚本,粘贴 `grs-enhance.user.js` 全部内容并保存
+4. 打开浙大研究生院选课页面(`yjsy.zju.edu.cn`,菜单"我的课程")自动生效
 
 ## 功能
 
