@@ -162,7 +162,7 @@
       };
     });
   }
-  // 某班级候选(待处理)队列: 服务器返回顺序即处理顺序, index+1 = 位次
+  // 某班级候选(待处理)队列: 同时展示服务器返回顺序与 createTime 升序, 供交叉参考
   function loadQueue(kcbjId) {
     return callApi("/py/pyXsxk/queryDclXsListByKcbjId", { kcbjId: kcbjId }, "POST").then(function (d) {
       return (d && d.result) || [];
@@ -334,10 +334,18 @@
       return b;
     }
     var dir = d.changed === "up" ? " ↑前进" : d.changed === "down" ? " ↓后移" : "";
+    var timeText = d.timePos != null ? " · 时间 " + d.timePos + "/" + d.total : "";
     b.style.cssText = "display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;" +
       "background:#fef3c7;color:#b45309;font-size:12px;font-weight:600;white-space:nowrap;vertical-align:1px;" +
       "cursor:help;";
-    b.textContent = "排队第 " + d.pos + " 位 / 共 " + d.total + " 人" + dir;
+    b.textContent = "排队 接口 " + d.pos + "/" + d.total + timeText + dir + " ";
+    var q = document.createElement("span");
+    q.setAttribute("data-xsxk-rank-help", "1");
+    q.style.cssText = "display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;" +
+      "border-radius:50%;background:#fde68a;color:#92400e;font-size:10px;font-weight:700;vertical-align:1px;";
+    q.textContent = "?";
+    q.title = "接口顺序: queryDclXsListByKcbjId 返回数组的原始顺序。时间顺序: 按 createTime 从早到晚排序。学校未公开最终处理排序,两者仅供参考。";
+    b.appendChild(q);
     return b;
   }
   function injectInlineBadges() {
@@ -474,7 +482,7 @@
         '<td style="padding:3px 8px 3px 0;color:#64748b;white-space:nowrap">' + esc(it.campus || "—") + "</td>" +
         '<td style="padding:3px 8px 3px 0;white-space:nowrap;color:#475569">' + (sel != null ? sel + "/" + it.bjrl : "—") + "</td>" +
         '<td style="padding:3px 8px 3px 0;white-space:nowrap;color:' + (it.hxrs === 0 ? "#059669" : it.hxrs <= 10 ? "#b45309" : "#0f172a") + ';font-weight:600">' +
-        esc(String(it.hxrs)) + " 人" + (it.mine && d.pos != null ? "(第" + d.pos + "位)" : "") + "</td>" +
+        esc(String(it.hxrs)) + " 人" + (it.mine && d.pos != null ? "(接口第" + d.pos + "位" + (d.timePos != null ? "/时间第" + d.timePos + "位" : "") + ")" : "") + "</td>" +
         "<td>" + (it.mine ? "" :
           '<button data-bj="' + esc(it.id) + '" style="border:1px solid #cbd5e1;background:#fff;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;color:#475569;white-space:nowrap">' +
           (hasRoom ? "换到此班" : "换·排队") + "</button>") + "</td></tr>";
@@ -488,7 +496,7 @@
     var sel = (it.yxrs != null && it.hxrs != null) ? Math.max(0, it.yxrs - it.hxrs) : null;
     var willQueue = sel == null || sel >= it.bjrl;
     var msg = "换班确认\n\n课 程:" + d.kcmc +
-      "\n当前班:" + (d.teacher || "?") + (d.pos != null ? "(排队第 " + d.pos + " 位)" : "(已选)");
+      "\n当前班:" + (d.teacher || "?") + (d.pos != null ? "(接口第 " + d.pos + " 位" + (d.timePos != null ? ", 时间第 " + d.timePos + " 位" : "") + ")" : "(已选)");
     msg += "\n目标班:" + it.teacher + (it.campus ? " · " + it.campus : "") + " (已选 " + (sel != null ? sel : "?") + "/" + it.bjrl + ", 排队 " + it.hxrs + " 人)";
     if (willQueue) msg += "\n\n注意: 目标班已满, 换班后你将排在其队列末尾!";
     msg += "\n\n确认换班?";
@@ -512,6 +520,7 @@
       });
   }
   function showTip(badge) {
+    if (badge && badge.closest && badge.closest("span[data-xsxk-rank-help]")) return;
     var kcbh = badge.getAttribute("data-k") || "";
     var d = posByKcbh[kcbh];
     if (!d || !d.kckId) return;
@@ -535,6 +544,7 @@
   document.body.addEventListener("mouseover", function (e) {
     var t = e.target;
     if (!(t && t.closest)) return;
+    if (t.closest("span[data-xsxk-rank-help]")) return;
     var badge = t.closest("span[" + BADGE_ATTR + "]");
     if (badge) showTip(badge);
   });
@@ -565,12 +575,22 @@
             if (list[i].id === r.id || list[i].xsId === r.xsId) { idx = i; break; }
           }
           var pos = idx >= 0 ? idx + 1 : null;
+          var sortedByTime = list.slice().sort(function (a, b) {
+            var ta = Date.parse(String(a.createTime || "").replace(" ", "T")) || Number.MAX_SAFE_INTEGER;
+            var tb = Date.parse(String(b.createTime || "").replace(" ", "T")) || Number.MAX_SAFE_INTEGER;
+            return ta - tb;
+          });
+          var timeIdx = -1;
+          for (var ti = 0; ti < sortedByTime.length; ti++) {
+            if (sortedByTime[ti].id === r.id || sortedByTime[ti].xsId === r.xsId) { timeIdx = ti; break; }
+          }
+          var timePos = timeIdx >= 0 ? timeIdx + 1 : null;
           var prev = lastPos[r.kcbjId];
           lastPos[r.kcbjId] = pos;
           posByKcbh[r.kcbh] = {
             kcmc: r.kcmc, kcbh: r.kcbh, kcbjId: r.kcbjId, kckId: r.kckId, pkxq: r.pkxq,
             recId: r.id, xsId: r.xsId, teacher: r.zjjsXm || "",
-            pos: pos, total: list.length,
+            pos: pos, timePos: timePos, total: list.length,
             changed: prev != null && pos != null && prev !== pos ? (pos < prev ? "up" : "down") : null
           };
         });
