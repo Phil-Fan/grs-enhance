@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GRS Enhance — 浙大研究生选课助手
 // @namespace    grs-enhance
-// @version      1.7
+// @version      2.0
 // @description  浙大研究生选课页面:排队位次内联显示在课程表格旁,悬停徽章可对比同课程各教学班排队情况并一键换班;课表悬浮窗完整显示、可折叠缩放
 // @author       philfan
 // @match        https://yjsy.zju.edu.cn/*
