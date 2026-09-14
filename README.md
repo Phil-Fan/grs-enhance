@@ -4,6 +4,12 @@
 
 ## 安装
 
+### 直接安装
+
+[脚本下载 - Greasy Fork](https://greasyfork.org/zh-CN/scripts/595750-grs-enhance-浙大研究生选课助手)
+
+### 自己复制
+
 1. 浏览器安装 [Tampermonkey](https://www.tampermonkey.net/)
 2. 新建脚本,粘贴 `grs-enhance.user.js` 全部内容并保存
 3. 打开浙大研究生院选课页面(`yjsy.zju.edu.cn`,菜单"我的课程")自动生效
