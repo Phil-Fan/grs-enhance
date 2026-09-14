@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GRS Enhance — 浙大研究生选课助手
 // @namespace    grs-enhance
-// @version      1.5
+// @version      1.6
 // @description  浙大研究生选课页面:排队位次内联显示在课程表格旁,悬停徽章可对比同课程各教学班排队情况并一键换班;课表悬浮窗完整显示、可折叠缩放
 // @author       philfan
 // @match        https://yjsy.zju.edu.cn/*
@@ -324,6 +324,15 @@
     var b = document.createElement("span");
     b.setAttribute(BADGE_ATTR, "1");
     b.setAttribute("data-k", d.kcbh || "");
+    if (d.selected) {
+      // 已选课(正在修读): 蓝色徽章, hover 对比各教学班, 可一键换班
+      b.style.cssText = "display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;" +
+        "background:#dbeafe;color:#1d4ed8;font-size:12px;font-weight:600;white-space:nowrap;vertical-align:1px;" +
+        "cursor:help;";
+      b.textContent = "⇄ 班级对比";
+      b.title = "悬停对比各教学班, 可一键换班";
+      return b;
+    }
     var dir = d.changed === "up" ? " ↑前进" : d.changed === "down" ? " ↓后移" : "";
     b.style.cssText = "display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;" +
       "background:#fef3c7;color:#b45309;font-size:12px;font-weight:600;white-space:nowrap;vertical-align:1px;" +
@@ -340,8 +349,13 @@
       Object.keys(posByKcbh).forEach(function (k) { if (rowText.indexOf(k) >= 0) kcbhHit = k; });
       var ztTd = null, old = tr.querySelector("span[" + BADGE_ATTR + "]");
       if (kcbhHit) {
+        var want = posByKcbh[kcbhHit].selected ? "正在修读" : "待处理";
         Array.prototype.forEach.call(tr.querySelectorAll("td"), function (td) {
-          if (!ztTd && td.textContent.indexOf("待处理") >= 0) ztTd = td;
+          if (!ztTd && td.textContent.indexOf(want) >= 0) ztTd = td;
+        });
+        // 兜底: 状态列文案变化时挂到任一状态单元格
+        if (!ztTd) Array.prototype.forEach.call(tr.querySelectorAll("td"), function (td) {
+          if (!ztTd && (td.textContent.indexOf("正在修读") >= 0 || td.textContent.indexOf("待处理") >= 0)) ztTd = td;
         });
       }
       if (!ztTd) { if (old) old.remove(); return; }
@@ -444,6 +458,7 @@
   function renderTip(d, items) {
     tipItems = items; tipKcbh = d.kcbh;
     var h = '<div style="font-weight:700;margin-bottom:2px">' + esc(d.kcmc) +
+      (d.selected ? ' <span style="font-size:11px;font-weight:600;color:#1d4ed8;background:#dbeafe;border-radius:4px;padding:0 4px;vertical-align:1px">已选</span>' : "") +
       ' <span style="font-weight:400;color:#94a3b8">' + esc(d.kcbh) + "</span></div>" +
       '<div style="color:#94a3b8;font-size:11px;margin-bottom:6px">各教学班排队对比(按排队人数升序),可点击换班</div>' +
       '<table style="border-collapse:collapse;width:100%;font-size:12px">';
@@ -455,7 +470,7 @@
       var hasRoom = sel != null && sel < it.bjrl;
       var bg = it.mine ? "background:#eff6ff;" : i === 0 && it.hxrs === 0 && hasRoom ? "background:#f0fdf4;" : "";
       h += '<tr style="' + bg + (it.mine ? "font-weight:700;" : "") + '">' +
-        '<td style="padding:3px 8px 3px 0;white-space:nowrap">' + esc(it.teacher) + (it.mine ? ' <span style="color:#2563eb">← 我在此班</span>' : "") + "</td>" +
+        '<td style="padding:3px 8px 3px 0;white-space:nowrap">' + esc(it.teacher) + (it.mine ? ' <span style="color:#2563eb">← 我在此班' + (d.selected ? "(已选)" : "") + "</span>" : "") + "</td>" +
         '<td style="padding:3px 8px 3px 0;color:#64748b;white-space:nowrap">' + esc(it.campus || "—") + "</td>" +
         '<td style="padding:3px 8px 3px 0;white-space:nowrap;color:#475569">' + (sel != null ? sel + "/" + it.bjrl : "—") + "</td>" +
         '<td style="padding:3px 8px 3px 0;white-space:nowrap;color:' + (it.hxrs === 0 ? "#059669" : it.hxrs <= 10 ? "#b45309" : "#0f172a") + ';font-weight:600">' +
@@ -473,7 +488,7 @@
     var sel = (it.yxrs != null && it.hxrs != null) ? Math.max(0, it.yxrs - it.hxrs) : null;
     var willQueue = sel == null || sel >= it.bjrl;
     var msg = "换班确认\n\n课 程:" + d.kcmc +
-      "\n当前班:" + (d.teacher || "?") + "(排队第 " + d.pos + " 位)";
+      "\n当前班:" + (d.teacher || "?") + (d.pos != null ? "(排队第 " + d.pos + " 位)" : "(已选)");
     msg += "\n目标班:" + it.teacher + (it.campus ? " · " + it.campus : "") + " (已选 " + (sel != null ? sel : "?") + "/" + it.bjrl + ", 排队 " + it.hxrs + " 人)";
     if (willQueue) msg += "\n\n注意: 目标班已满, 换班后你将排在其队列末尾!";
     msg += "\n\n确认换班?";
@@ -535,6 +550,14 @@
   /* ---------- 排队位次: 仅同步到主表格内联徽章(面板只显示课表) ---------- */
   function refreshPos() {
     return loadMyCourses().then(function (mine) {
+      // 已选课(正在修读): 无位次, 注入"班级对比"徽章, hover 可对比各教学班并一键换班
+      mine.selected.forEach(function (r) {
+        posByKcbh[r.kcbh] = {
+          kcmc: r.kcmc, kcbh: r.kcbh, kcbjId: r.kcbjId, kckId: r.kckId, pkxq: r.pkxq,
+          recId: r.id, xsId: r.xsId, teacher: r.zjjsXm || "",
+          pos: null, total: null, selected: true, changed: null
+        };
+      });
       var queueJobs = mine.pending.map(function (r) {
         return loadQueue(r.kcbjId).then(function (list) {
           var idx = -1;
@@ -556,9 +579,10 @@
     }).then(function () {
       var fresh = {};
       Object.keys(posByKcbh).forEach(function (k) {
-        if (posByKcbh[k].pos != null) fresh[k] = posByKcbh[k];
+        var d = posByKcbh[k];
+        if (d.pos != null || d.selected) fresh[k] = d;
       });
-      posByKcbh = fresh; // 已退出排队(位次为 null)的课程不再显示徽章
+      posByKcbh = fresh; // 已退课/退出排队的课程不再显示徽章
       injectInlineBadges();
     }).catch(function (e) {
       console.warn("[选课助手] 位次刷新失败:", e && e.message);
